@@ -135,8 +135,78 @@ fi
 
 echo ""
 
-# Step 3: Restart gateway if needed
-echo "🔄 Step 3: Restarting Clawdbot gateway..."
+# Step 3: Configure exec-approvals.json for allowlist
+echo "🔐 Step 3: Configuring exec allowlist for cron commands..."
+
+APPROVALS_FILE="$HOME/.clawdbot/exec-approvals.json"
+
+# Use Python to safely update the exec-approvals config
+python3 << 'PYTHON_SCRIPT'
+import json
+import os
+import uuid
+
+approvals_file = os.path.expanduser("~/.clawdbot/exec-approvals.json")
+
+try:
+    # Read existing file or create new structure
+    if os.path.exists(approvals_file):
+        with open(approvals_file, 'r') as f:
+            approvals = json.load(f)
+    else:
+        approvals = {"version": 1, "socket": {}, "defaults": {}, "agents": {}}
+
+    # Ensure agents section exists
+    if "agents" not in approvals:
+        approvals["agents"] = {}
+
+    # Add or update the main agent with allowlist for clawdbot cron commands
+    if "main" not in approvals["agents"]:
+        approvals["agents"]["main"] = {}
+
+    approvals["agents"]["main"]["security"] = "allowlist"
+    approvals["agents"]["main"]["ask"] = "off"
+
+    # Initialize allowlist if it doesn't exist
+    if "allowlist" not in approvals["agents"]["main"]:
+        approvals["agents"]["main"]["allowlist"] = []
+
+    # Check if clawdbot cron pattern already exists
+    pattern_exists = any(
+        entry.get("pattern") == "clawdbot cron *"
+        for entry in approvals["agents"]["main"]["allowlist"]
+    )
+
+    if not pattern_exists:
+        approvals["agents"]["main"]["allowlist"].append({
+            "id": str(uuid.uuid4()),
+            "pattern": "clawdbot cron *"
+        })
+
+    # Write the updated file
+    os.makedirs(os.path.dirname(approvals_file), exist_ok=True)
+    with open(approvals_file, 'w') as f:
+        json.dump(approvals, f, indent=2)
+
+    print('SUCCESS')
+except Exception as e:
+    print(f'ERROR: {e}')
+    import sys
+    sys.exit(1)
+PYTHON_SCRIPT
+
+if [ $? -eq 0 ]; then
+    echo "  ✅ Allowlist configured: clawdbot cron commands are now allowed"
+else
+    echo "  ⚠️  Could not configure allowlist automatically"
+    echo "  📝 You may need to manually add to $APPROVALS_FILE:"
+    echo '     "agents": {"main": {"allowlist": [{"pattern": "clawdbot cron *"}]}}'
+fi
+
+echo ""
+
+# Step 4: Restart gateway if needed
+echo "🔄 Step 4: Restarting Clawdbot gateway..."
 
 # Check if clawdbot is running
 if pgrep -f "clawdbot gateway" > /dev/null 2>&1; then
