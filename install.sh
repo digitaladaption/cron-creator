@@ -145,6 +145,7 @@ python3 << 'PYTHON_SCRIPT'
 import json
 import os
 import uuid
+import shutil
 
 approvals_file = os.path.expanduser("~/.clawdbot/exec-approvals.json")
 
@@ -160,7 +161,7 @@ try:
     if "agents" not in approvals:
         approvals["agents"] = {}
 
-    # Add or update the main agent with allowlist for clawdbot cron commands
+    # Add or update the main agent with allowlist for clawdbot binary
     if "main" not in approvals["agents"]:
         approvals["agents"]["main"] = {}
 
@@ -171,17 +172,37 @@ try:
     if "allowlist" not in approvals["agents"]["main"]:
         approvals["agents"]["main"]["allowlist"] = []
 
-    # Check if clawdbot cron pattern already exists
-    pattern_exists = any(
-        entry.get("pattern") == "clawdbot cron *"
-        for entry in approvals["agents"]["main"]["allowlist"]
-    )
+    # Find the clawdbot binary path
+    clawdbot_path = shutil.which("clawdbot")
+    if not clawdbot_path:
+        # Fallback to common paths
+        for path in ["~/.linuxbrew/bin/clawdbot", "/home/linuxbrew/.linuxbrew/bin/clawdbot", "/usr/local/bin/clawdbot"]:
+            expanded = os.path.expanduser(path)
+            if os.path.exists(expanded):
+                clawdbot_path = expanded
+                break
 
-    if not pattern_exists:
-        approvals["agents"]["main"]["allowlist"].append({
-            "id": str(uuid.uuid4()),
-            "pattern": "clawdbot cron *"
-        })
+    if clawdbot_path:
+        clawdbot_path = os.path.abspath(clawdbot_path)
+        # Check if this path already exists in allowlist
+        pattern_exists = any(
+            entry.get("pattern") == clawdbot_path
+            for entry in approvals["agents"]["main"]["allowlist"]
+        )
+
+        if not pattern_exists:
+            approvals["agents"]["main"]["allowlist"].append({
+                "id": str(uuid.uuid4()),
+                "pattern": clawdbot_path
+            })
+    else:
+        # Fallback to homebrew linuxbrew pattern if binary not found
+        homebrew_pattern = "~/.linuxbrew/bin/*"
+        if not any(entry.get("pattern") == homebrew_pattern for entry in approvals["agents"]["main"]["allowlist"]):
+            approvals["agents"]["main"]["allowlist"].append({
+                "id": str(uuid.uuid4()),
+                "pattern": homebrew_pattern
+            })
 
     # Write the updated file
     os.makedirs(os.path.dirname(approvals_file), exist_ok=True)
@@ -196,11 +217,11 @@ except Exception as e:
 PYTHON_SCRIPT
 
 if [ $? -eq 0 ]; then
-    echo "  ✅ Allowlist configured: clawdbot cron commands are now allowed"
+    echo "  ✅ Allowlist configured: clawdbot binary is now allowed"
 else
     echo "  ⚠️  Could not configure allowlist automatically"
     echo "  📝 You may need to manually add to $APPROVALS_FILE:"
-    echo '     "agents": {"main": {"allowlist": [{"pattern": "clawdbot cron *"}]}}'
+    echo '     "agents": {"main": {"allowlist": [{"pattern": "/path/to/clawdbot"}]}}'
 fi
 
 echo ""
