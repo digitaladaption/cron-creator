@@ -7,9 +7,41 @@ description: "Create Clawdbot cron jobs from natural language. Use when: users w
 
 Create Clawdbot cron jobs automatically from natural language requests.
 
+## Quick Install (One Command)
+
+Run this in your terminal:
+
+```bash
+bash -c "$(curl -sL https://raw.githubusercontent.com/digitaladaption/cron-creator/main/install.sh)"
+```
+
+Or manually:
+
+```bash
+# Install skill
+mkdir -p ~/.clawdbot/skills
+git clone https://github.com/digitaladaption/cron-creator.git ~/.clawdbot/skills/cron-creator
+
+# Configure and restart
+clawdbot gateway restart
+```
+
+That's it! Then just say things like:
+
+- "Create a daily Ikigai reminder at 8:45am"
+- "Remind me to drink water every 2 hours"
+- "Set up a weekly check-in on Mondays at 9am"
+
+## What It Does
+
+1. **Hears** your request to create a cron job
+2. **Parses** time, frequency, channel, and message
+3. **Creates** the cron job automatically
+4. **Confirms** it's done
+
 ## Trigger Patterns
 
-This skill activates when users ask to create cron jobs:
+Say things like:
 - "Create a cron job for..."
 - "Set up a reminder..."
 - "Schedule a..."
@@ -17,194 +49,121 @@ This skill activates when users ask to create cron jobs:
 - "Create a daily/weekly check-in..."
 - "Add a recurring..."
 
-## Workflow
+## Examples
 
-1. **Parse the request** - Extract: time, frequency, channel, message, destination
-2. **Generate command** - Build appropriate `clawdbot cron add` command
-3. **Execute** - Run the command via exec tool
-4. **Confirm** - Report success/failure with job details
+| You Say | What Happens |
+|---------|-------------|
+| "Create a daily Ikigai reminder at 8:45am" | Creates daily 8:45am Ikigai journal prompt |
+| "Remind me to drink water every 2 hours" | Creates hourly water reminder |
+| "Set up a weekly check-in on Mondays at 9am" | Creates Monday 9am weekly review |
+| "Wake me at 7am every day" | Creates daily 7am alarm/reminder |
+| "Send me a quote every morning at 6:30" | Creates daily quote at 6:30am |
 
-## Parsing Rules
+## Supported Time Formats
 
-### Time Extraction
-| Input | Cron Expression |
-|-------|-----------------|
+| You Say | Cron |
+|---------|------|
 | "8am" | `0 8 * * *` |
 | "8:45am" | `45 8 * * *` |
 | "9pm" | `0 21 * * *` |
-| "9:30pm" | `30 21 * * *` |
 | "noon" | `0 12 * * *` |
 | "midnight" | `0 0 * * *` |
 
-### Frequency Extraction
-| Input | Cron Expression |
-|-------|-----------------|
-| "daily" | `* * * * *` (with time) |
-| "every day" | `* * * * *` (with time) |
-| "weekdays" | `0 9 * * 1-5` |
-| "mondays" | `0 9 * * 1` |
-| "weekly" | `0 9 * * 0` (Sunday) or infer day |
-| "monthly" | `0 9 1 * *` |
-| "every hour" | `0 * * * *` |
-| "every 30 minutes" | `*/30 * * * *` |
+## Supported Frequencies
+
+| You Say | Cron |
+|---------|------|
+| "daily" / "every day" | Daily at specified time |
+| "weekdays" | Mon-Fri at specified time |
+| "mondays" / "every monday" | Weekly on Monday |
+| "hourly" / "every hour" | Every hour at :00 |
 | "every 2 hours" | `0 */2 * * *` |
+| "weekly" | Weekly (defaults to Monday) |
+| "monthly" | Monthly (1st of month) |
 
-### Channel Detection
-| Input | Channel |
-|-------|---------|
-| "whatsapp" | whatsapp |
-| "on whatsapp" | whatsapp |
-| "telegram" | telegram |
-| "on telegram" | telegram |
-| "slack" | slack |
-| "discord" | discord |
-| Default | whatsapp (use user's known number) |
+## Channels
 
-### Destination Extraction
-- Look for phone numbers (E.164 format)
-- Look for channel identifiers (#channel, @username)
-- Use known user contact if available
-- Default to user's primary WhatsApp
+Just mention the channel in your request:
+- "on WhatsApp" → WhatsApp
+- "on Telegram" → Telegram
+- "on Slack" → Slack
+- "on Discord" → Discord
+
+Default: WhatsApp
 
 ## Default Messages
 
-If no message provided, use appropriate defaults:
+The skill auto-generates appropriate messages:
 
 | Type | Default Message |
 |------|-----------------|
-| Daily check-in | "🌅 Good morning! Time for your daily check-in. How are you feeling?" |
+| Ikigai | Morning journal with purpose, food, movement, connection, gratitude |
+| Water | "💧 Time to drink water! Stay hydrated! 🚰" |
+| Morning | "🌅 Good morning! Time for your daily check-in." |
 | Evening | "🌙 Evening check-in! How was your day?" |
-| Reminder | "⏰ Reminder: [inferred topic]" |
-| Health | "💧 Time to drink water and stretch! Stay healthy!" |
-| Learning | "📚 Learning time! What did you learn today?" |
-| Weekly | "📊 Weekly check-in! Review your goals and set intentions." |
+| Weekly | Weekly goals review |
+| Default | "⏰ Your scheduled reminder is here!" |
 
-## Command Generation
+## How It Works
 
-Build the `clawdbot cron add` command:
+1. **Install** the skill (see Quick Install above)
+2. **Chat** naturally: "Create a daily reminder at 8am"
+3. **Done!** The cron job is created automatically
 
+## For Developers
+
+### Files
+- `SKILL.md` - This documentation
+- `scripts/cron_creator.py` - Natural language parser
+- `install.sh` - Automatic installer script
+
+### The Parser
+The `cron_creator.py` script:
+- Extracts time, frequency, channel, destination from natural language
+- Generates appropriate `clawdbot cron add` command
+- Returns JSON with parsed fields and command
+
+### Manual Testing
 ```bash
-clawdbot cron add \
-  --name="[NAME]" \
-  --cron="[EXPRESSION]" \
-  --message="[MESSAGE]" \
-  --channel=[CHANNEL] \
-  --to=[DESTINATION] \
-  --agent=main
+# Test the parser
+python3 scripts/cron_creator.py "Create a daily reminder at 8:45am"
+
+# Output includes:
+# - parsed time, frequency, channel
+# - generated cron expression
+# - full clawdbot cron add command
 ```
 
-### Name Generation
-- Use descriptive name based on purpose
-- Include frequency if helpful
-- Examples: "Daily Morning Check-in", "Weekly Ikigai Review"
+### Configuration
+The install script automatically configures:
+- Clawdbot tools.exec.host=gateway (allows running clawdbot commands)
+- Skill files in ~/.clawdbot/skills/cron-creator
+- Gateway restart to apply changes
 
-## Execution
+### Troubleshooting
 
-Execute the command using exec tool with `host: "gateway"` to run on the Clawdbot server.
-
-## Confirmation
-
-Report success with:
-- Job name
-- Schedule
-- Channel and destination
-- Message preview
-- Next run time
-
-## Examples
-
-### Example 1: "Create a daily reminder at 8:45am for Ikigai journaling"
-```
-1. Extract: time=8:45am, frequency=daily, purpose=Ikigai journaling
-2. Generate cron: "45 8 * * *"
-3. Build command:
-   clawdbot cron add \
-     --name="Ikigai Morning Journal" \
-     --cron="45 8 * * *" \
-     --message="🌅 Ikigai Morning Journal\n\n1. Purpose - What gives you energy today?\n2. Food - Hara Hachi Bu goal?\n3. Movement - One move today?" \
-     --channel=whatsapp \
-     --to=+447751115542 \
-     --agent=main
-4. Execute via exec
-5. Confirm: "✅ Created 'Ikigai Morning Journal' - runs daily at 8:45am on WhatsApp"
+**Skill not loading?**
+```bash
+clawdbot skills list | grep cron
 ```
 
-### Example 2: "Remind me to drink water every 2 hours"
-```
-1. Extract: frequency=every 2 hours, purpose=drink water
-2. Generate cron: "0 */2 * * *"
-3. Build command:
-   clawdbot cron add \
-     --name="Water Reminder" \
-     --cron="0 */2 * * *" \
-     --message="💧 Time to drink water! Stay hydrated! 🚰" \
-     --channel=whatsapp \
-     --to=+447751115542 \
-     --agent=main
-4. Execute
-5. Confirm: "✅ Created 'Water Reminder' - runs every 2 hours on WhatsApp"
+**Cron not created?**
+```bash
+# Check clawdbot is running
+clawdbot status
+
+# Check cron jobs
+clawdbot cron list
 ```
 
-### Example 3: "Set up a weekly check-in on Mondays at 9am"
-```
-1. Extract: time=9am, frequency=Mondays, purpose=weekly check-in
-2. Generate cron: "0 9 * * 1"
-3. Build command:
-   clawdbot cron add \
-     --name="Weekly Check-in" \
-     --cron="0 9 * * 1" \
-     --message="📊 Weekly Check-in\n\n1. What went well this week?\n2. What could improve?\n3. Goal for next week?" \
-     --channel=whatsapp \
-     --to=+447751115542 \
-     --agent=main
-4. Execute
-5. Confirm: "✅ Created 'Weekly Check-in' - runs every Monday at 9am on WhatsApp"
+**Need to reinstall?**
+```bash
+# Run install again
+bash -c "$(curl -sL https://raw.githubusercontent.com/digitaladaption/cron-creator/main/install.sh)"
 ```
 
-## Error Handling
+## GitHub
 
-### Invalid time format
-Ask for clarification: "What time should this run? (e.g., 8am, 9:30pm, noon)"
+https://github.com/digitaladaption/cron-creator
 
-### Invalid frequency
-Ask for clarification: "How often? (e.g., daily, weekly, every hour, weekdays)"
-
-### Missing channel
-Default to WhatsApp, confirm: "Should this go to WhatsApp?"
-
-### Execution failed
-- Check clawdbot is running: `clawdbot status`
-- Check gateway connectivity
-- Report specific error and suggest manual fallback
-
-## Special Cases
-
-### One-time reminders
-If user says "remind me in 20 minutes" or "at 3pm tomorrow":
-- Use `--at="+20m"` or `--at="15:00"` instead of `--cron`
-- Add `--delete-after-run` flag
-
-### Complex schedules
-For complex requests like "first Monday of every month":
-- Use appropriate cron: `0 9 1-7 * 1` (first Monday)
-- Explain the schedule to user
-
-### With options
-If user specifies thinking mode, model, etc.:
-- Add `--thinking=[level]` if requested
-- Add `--model=[model]` if requested
-- Add `--best-effort-deliver` if requested
-
-## Implementation
-
-This skill uses the `exec` tool to run commands on the gateway:
-
-```json
-{
-  "command": "clawdbot cron add",
-  "args": ["--name=...", "--cron=...", ...],
-  "host": "gateway"
-}
-```
-
-Ensure exec tool has proper permissions to run clawdbot commands.
+Report issues or contribute there!
